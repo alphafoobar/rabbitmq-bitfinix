@@ -1,0 +1,92 @@
+Description: >
+  RabbitMQ ECS stack.
+
+Parameters:
+  ContainerName:
+    Type: String
+    Default: "rabbit-cont"
+
+  LoadBalancerName:
+    Type: String
+    Default: "rabbitmq-1"
+    Description: The name to give the load balancer DNS. Must be unique in your account.
+    MinLength: 4
+    MaxLength: 32
+    AllowedPattern: ^[A-Za-z0-9\-]*$
+    ConstraintDescription: >
+     Load balancer name must be unique, more than 4 characters, less than 33 characters and only include letters and numbers.
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues: [t2.nano, t2.micro, t2.small, t2.medium, t2.large, t2.xlarge, t2.2xlarge, m3.medium, m3.large, m3.xlarge, m3.2xlarge, m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge, m4.16xlarge]
+    Description: The size of the instance host that will run the Docker images.
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+#
+#  SplunkToken:
+#    Type: String
+#    Description: This is the token to log on the Splunk cloud
+#
+#  SplunkUrl:
+#    Type: String
+#    Description: This is the API for Splunk, generally on 8088
+
+  S3Region:
+    Type: String
+    Default: "us-west-2"
+    AllowedValues : ["us-west-2", "us-west-1", "ap-south-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1"]
+    Description: S3 Region where bucket resides (us-west-2 is Oregon)
+
+  S3TemplateBucket:
+    Type: String
+    Description: S3 Bucket containing templates.zip (requires versioning on)
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select a VPC that allows instances access to the Internet.
+
+  SubnetId:
+    Type: String
+    Description: Select at least two subnets in your selected VPC.
+
+Resources:
+
+  LoadBalancer:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3-${S3Region}.amazonaws.com/${S3TemplateBucket}/templates/load-balancer.yaml
+      Parameters:
+        ElasticLoadBalancer: !Ref LoadBalancerName
+        VpcId: !Ref VpcId
+        Subnets: !Ref SubnetId
+
+  Cluster:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3-${S3Region}.amazonaws.com/${S3TemplateBucket}/templates/ecs-cluster.yaml
+      Parameters:
+        KeyName: !Ref KeyName
+        InstanceType: !Ref InstanceType
+        ElasticLoadBalancer: !Ref LoadBalancerName
+        SourceSecurityGroup: !GetAtt LoadBalancer.Outputs.SecurityGroup
+        Subnets: !Ref SubnetId
+        VpcId: !Ref VpcId
+        ContainerName: !Ref ContainerName
+
+  Service:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://s3-${S3Region}.amazonaws.com/${S3TemplateBucket}/templates/service.yaml
+      Parameters:
+        Cluster: !GetAtt Cluster.Outputs.ClusterName
+        TargetGroup: !GetAtt LoadBalancer.Outputs.TargetGroup
+        ContainerName: !Ref ContainerName
+
+Outputs:
+  ServiceUrl:
+    Description: Public URL for the loadbalancer.
+    Value: !GetAtt LoadBalancer.Outputs.ServiceUrl

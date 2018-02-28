@@ -1,0 +1,115 @@
+Parameters:
+  ElasticLoadBalancer:
+    Type: String
+
+  VpcId:
+    Type: String
+
+  Subnets:
+    Type: String
+
+Resources:
+  SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: !Sub ${AWS::StackName}-autoloadbalancer
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "TCP"
+          FromPort: 15672
+          ToPort: 15672
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "TCP"
+          FromPort: 5672
+          ToPort: 5672
+      VpcId: !Ref VpcId
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref ElasticLoadBalancer
+      Type: network
+      Subnets: !Split [",", !Ref Subnets]
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 15672
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  LoadBalancerListenerSocket:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 5672
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroupSocket
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: LoadBalancer
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 15672
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10 # Healthcheck timeout must be smaller than the interval
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 6
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 300
+
+  TargetGroupSocket:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: LoadBalancer
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 5672
+      Protocol: TCP
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListener
+      Priority: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListenerSocket
+      Priority: 1
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+
+Outputs:
+  TargetGroup:
+    Value: !Ref TargetGroup
+
+  ElasticLoadBalancer:
+    Value: !GetAtt LoadBalancer.LoadBalancerName
+
+  ServiceUrl:
+    Description: URL of the load balancer for the sample service.
+    Value: !Sub http://${LoadBalancer.DNSName}
+
+  SecurityGroup:
+    Value: !Ref SecurityGroup

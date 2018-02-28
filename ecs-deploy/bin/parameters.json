@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "KeyName",
+    "ParameterValue": "kaizen7-ecs"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-837394e4"
+  },
+  {
+    "ParameterKey": "SubnetId",
+    "ParameterValue": "subnet-532a8334,subnet-669e452f"
+  },
+  {
+    "ParameterKey": "S3Region",
+    "ParameterValue": "ap-southeast-2"
+  },
+  {
+    "ParameterKey": "S3TemplateBucket",
+    "ParameterValue": "ecs-deployment"
+  }
+]

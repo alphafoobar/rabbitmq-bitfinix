@@ -1,0 +1,74 @@
+Parameters:
+  ContainerName:
+    Type: String
+
+#  SplunkToken:
+#    Type: String
+#
+#  SplunkUrl:
+#    Type: String
+
+  Tag:
+    Type: String
+    Default: latest
+
+  DesiredCount:
+    Type: Number
+    Default: 0
+
+  TargetGroup:
+    Type: String
+
+  Cluster:
+    Type: String
+
+Resources:
+  ECSServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument: |
+        {
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": { "Service": [ "ecs.amazonaws.com" ]},
+                "Action": [ "sts:AssumeRole" ]
+            }]
+        }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      Role: !Ref ECSServiceRole
+      DesiredCount: !Ref DesiredCount
+      TaskDefinition: !Ref TaskDefinition
+      LoadBalancers:
+        - ContainerName: !Ref ContainerName
+          ContainerPort: 15672
+          TargetGroupArn: !Ref TargetGroup
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-Task
+      ContainerDefinitions:
+        - Name: !Ref ContainerName
+          Image: rabbitmq:management
+          Essential: true
+          Cpu: 10
+          MemoryReservation: 500
+          PortMappings:
+            - ContainerPort: 5672
+#          LogConfiguration:
+#            LogDriver: splunk
+#            Options:
+#              splunk-format: raw
+#              splunk-token: !Ref SplunkToken
+#              splunk-url: !Ref SplunkUrl
+#              env: Production
+#              splunk-insecureskipverify: true
+
+
